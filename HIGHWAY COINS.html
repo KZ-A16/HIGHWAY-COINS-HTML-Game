@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Highway Coins – Moving Road</title>
+<style>
+*{box-sizing:border-box}body{margin:0;font-family:Arial,sans-serif;background:#101318;color:#fff;overflow:hidden}
+.screen{position:absolute;inset:0;display:none;align-items:center;justify-content:center;flex-direction:column}
+#home{display:flex;background:linear-gradient(#111827,#020617)}h1{font-size:54px;margin:0 0 10px;text-shadow:0 5px 20px #000}
+.subtitle{color:#aab4c3;margin-bottom:30px}button{border:0;border-radius:12px;padding:14px 28px;font-size:18px;font-weight:bold;cursor:pointer;background:#22c55e;color:#07110a;box-shadow:0 5px 15px #0006}
+#home .buttons{display:flex;gap:12px}
+#game{background:#0b0f14}
+#road{position:absolute;left:15%;width:70%;top:0;height:100%;background:#30343b;border-left:7px solid #ddd;border-right:7px solid #ddd;overflow:hidden}
+.lane{position:absolute;top:-110px;bottom:-110px;width:8px;background:repeating-linear-gradient(to bottom,#f7f7f7 0 55px,transparent 55px 110px);opacity:.8;will-change:background-position}
+.l1{left:33.33%}.l2{left:66.66%}
+#road:after{content:"";position:absolute;inset:0;background:linear-gradient(90deg,rgba(0,0,0,.08),transparent 20%,transparent 80%,rgba(0,0,0,.08));pointer-events:none}
+#car{position:absolute;bottom:12%;left:50%;transform:translateX(-50%);width:58px;height:105px;border-radius:16px 16px 10px 10px;background:#e11d48;box-shadow:0 0 18px #000;z-index:3;transition:background .2s}
+.traffic{position:absolute;width:52px;height:92px;border-radius:14px 14px 9px 9px;z-index:2;box-shadow:0 4px 10px #0008}
+.traffic:before{content:"";position:absolute;left:8px;right:8px;top:12px;height:27px;border-radius:8px;background:#94a3b8}
+.traffic:after{content:"";position:absolute;left:7px;right:7px;bottom:9px;height:16px;border-radius:5px;background:#111}
+#car:before{content:"";position:absolute;left:9px;right:9px;top:13px;height:31px;border-radius:10px;background:#7dd3fc}
+#car:after{content:"";position:absolute;left:7px;right:7px;bottom:11px;height:18px;border-radius:5px;background:#111}
+.hud{position:absolute;top:18px;left:18px;right:18px;display:flex;justify-content:space-between;z-index:5;font-weight:bold}.hud span{background:#0009;padding:10px 14px;border-radius:10px}
+#menuBtn{position:absolute;bottom:20px;right:20px;z-index:10;padding:10px 16px;font-size:14px}
+#shopBtn{position:absolute;bottom:20px;left:20px;z-index:10;padding:10px 16px;font-size:14px;background:#3b82f6;color:white}
+#shop{background:#111827;overflow:auto;padding:25px}.shopTitle{margin:0 0 18px;font-size:34px}
+.cars{width:min(900px,95vw);display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;padding:8px 4px 20px}
+.card{min-height:245px;overflow:visible}
+.card{background:#1f2937;border:1px solid #374151;border-radius:14px;padding:15px}.carPreview{height:55px;width:32px;border-radius:9px;margin-bottom:10px}
+.card h3{margin:4px 0}.card p{margin:5px 0;color:#cbd5e1;font-size:14px}.card button{width:100%;margin-top:9px;padding:10px;font-size:14px}
+.back{margin-top:20px;background:#64748b;color:white}
+</style>
+</head>
+<body>
+
+<div id="home" class="screen">
+<h1>HIGHWAY COINS</h1><div class="subtitle">Fahre auf der leeren Autobahn und verdiene Coins.</div>
+<div class="buttons"><button onclick="showGame()">SPIELEN</button><button onclick="showShop()">SHOP</button></div>
+</div>
+
+<div id="game" class="screen">
+<div id="road"><div class="lane l1"></div><div class="lane l2"></div></div><div id="trafficLayer"></div><div id="car"></div>
+<div class="hud"><span id="coinsHud">Coins: 0</span><span id="incomeHud">+10 / min</span></div>
+<button id="shopBtn" onclick="showShop()">SHOP</button>
+<button id="menuBtn" onclick="showHome()">MENÜ</button>
+</div>
+
+<div id="shop" class="screen">
+<h2 class="shopTitle">AUTO-SHOP</h2><div id="cars" class="cars"></div><button class="back" onclick="showHome()">ZURÜCK</button>
+</div>
+
+<script>
+let coins=0,currentCar=0,lastPayout=Date.now(),playing=false,x=50,targetX=50,lastFrame=0,roadOffset=0,traffic=[];
+const colors=["#e11d48","#2563eb","#f59e0b","#a855f7","#10b981","#ef4444","#06b6d4","#f97316","#8b5cf6","#22c55e","#f43f5e","#14b8a6","#eab308","#60a5fa","#f8fafc"];
+const cars=[
+["Starter",0,10,1],["City Compact",100,20,1.05],["Street GT",250,30,1.10],["Sport Coupe",500,45,1.18],
+["Rally X",900,60,1.25],["Muscle V8",1500,80,1.32],["Super GT",2500,105,1.40],["Roadster",4000,135,1.48],
+["Track Beast",6500,170,1.56],["Turbo RS",10000,220,1.65],["Elite GT",16000,280,1.74],["Supercar",25000,360,1.84],
+["Ultra Car",40000,470,1.94],["Hypercar",65000,620,2.05],["Ultimate X",100000,850,2.20]];
+function showOnly(id){document.querySelectorAll(".screen").forEach(s=>s.style.display="none");document.getElementById(id).style.display="flex"}
+function showHome(){playing=false;showOnly("home")}
+function showGame(){playing=true;lastPayout=Date.now();lastFrame=performance.now();roadOffset=0;traffic=[];document.getElementById("trafficLayer").innerHTML="";showOnly("game");updateHud();requestAnimationFrame(gameLoop)}
+function showShop(){renderShop();showOnly("shop")}
+function buyCar(i){if(i===currentCar)return;if(coins>=cars[i][1]){coins-=cars[i][1];currentCar=i;document.getElementById("car").style.background=colors[i];updateHud();renderShop()}else alert("Du hast noch nicht genug Coins!")}
+function renderShop(){document.getElementById("cars").innerHTML=cars.map((c,i)=>`<div class="card"><div class="carPreview" style="background:${colors[i]}"></div><h3>${i+1}. ${c[0]}</h3><p>Preis: ${c[1].toLocaleString("de-DE")} Coins</p><p>Einkommen: +${c[2]} Coins / Minute</p><p>Geschwindigkeit: ${c[3]}x</p><button onclick="buyCar(${i})">${i===currentCar?"AKTIV":coins>=c[1]?"KAUFEN":"GESPERRT"}</button></div>`).join("")}
+function updateHud(){document.getElementById("coinsHud").textContent="Coins: "+Math.floor(coins).toLocaleString("de-DE");document.getElementById("incomeHud").textContent="+"+cars[currentCar][2]+" / min"}
+
+function spawnTraffic(){
+  const lanePositions=[25,41.5,58.5,75];
+  const left=lanePositions[Math.floor(Math.random()*lanePositions.length)];
+  const colors=["#2563eb","#f59e0b","#10b981","#a855f7","#f97316","#e5e7eb","#64748b"];
+  const el=document.createElement("div");
+  el.className="traffic";
+  el.style.left=left+"%";
+  el.style.top="-120px";
+  el.style.background=colors[Math.floor(Math.random()*colors.length)];
+  document.getElementById("trafficLayer").appendChild(el);
+  traffic.push({el,left,top:-120,speed:0.16+Math.random()*0.10});
+}
+function updateTraffic(delta){
+  if(Math.random()<0.018+cars[currentCar][3]*0.004 && traffic.length<7) spawnTraffic();
+  for(let i=traffic.length-1;i>=0;i--){
+    const v=traffic[i];
+    v.top += delta*(0.18*cars[currentCar][3]+v.speed);
+    v.el.style.top=v.top+"px";
+    const playerY=window.innerHeight*0.76;
+    const playerX=x;
+    const carX=v.left;
+    if(v.top>window.innerHeight+130){v.el.remove();traffic.splice(i,1);continue}
+    if(v.top+92>playerY-45 && v.top<playerY+95 && Math.abs(carX-playerX)<5.5){
+      playing=false;
+      setTimeout(()=>{alert("💥 Crash! Ausweichen und weiterfahren!");showGame()},20);
+      return;
+    }
+  }
+}
+
+function gameLoop(t){if(!playing)return;let delta=Math.min(50,t-lastFrame);lastFrame=t;
+updateTraffic(delta);
+if(!playing)return;
+if(keys.left)targetX-=0.11*delta;
+if(keys.right)targetX+=0.11*delta;
+targetX=Math.max(17,Math.min(83,targetX));
+x+=(targetX-x)*(1-Math.pow(0.0018,delta));
+document.getElementById("car").style.left=x+"%";
+roadOffset=(roadOffset+delta*0.18*cars[currentCar][3])%110;
+document.querySelectorAll(".lane").forEach(l=>l.style.backgroundPosition="0 "+roadOffset+"px");
+let now=Date.now();if(now-lastPayout>=60000){let m=Math.floor((now-lastPayout)/60000);coins+=m*cars[currentCar][2];lastPayout+=m*60000;updateHud()}requestAnimationFrame(gameLoop)}
+const keys={left:false,right:false};
+document.addEventListener("keydown",e=>{
+ if(!playing)return;
+ if(e.key==="a"||e.key==="A"||e.key==="ArrowLeft"){keys.left=true;e.preventDefault()}
+ if(e.key==="d"||e.key==="D"||e.key==="ArrowRight"){keys.right=true;e.preventDefault()}
+});
+document.addEventListener("keyup",e=>{
+ if(e.key==="a"||e.key==="A"||e.key==="ArrowLeft")keys.left=false;
+ if(e.key==="d"||e.key==="D"||e.key==="ArrowRight")keys.right=false;
+});
+window.addEventListener("blur",()=>{keys.left=false;keys.right=false});
+showHome();
+</script>
+</body>
+</html>
